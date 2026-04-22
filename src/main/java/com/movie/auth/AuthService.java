@@ -5,8 +5,8 @@ import com.movie.module.user.Role;
 import com.movie.module.user.UserRepository;
 import com.movie.module.user.dto.AuthResponse;
 import com.movie.module.user.entities.User;
-import com.movie.theatreowner.model.Owner;
-import com.movie.theatreowner.repository.OwnerRepository;
+import com.movie.theatrevendor.model.Owner;
+import com.movie.theatrevendor.repository.OwnerRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 

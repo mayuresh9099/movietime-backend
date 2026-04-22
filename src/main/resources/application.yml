@@ -1,9 +1,21 @@
 spring:
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    time-zone: Asia/Kolkata
   datasource:
-    url: jdbc:mysql://localhost:3306/movietime?useSSL=false&serverTimezone=UTC
+    url: jdbc:mysql://localhost:3306/movietime?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
     username: root
     password: root@123   # change based on your local setup
     driver-class-name: com.mysql.cj.jdbc.Driver
+    # Connection pool optimization
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 20000
+      idle-timeout: 300000
 
   jpa:
     hibernate:
@@ -12,11 +24,51 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
-        format_sql: true
+        format_sql: false
+        # Batch optimization for better performance
+        jdbc:
+          batch_size: 20
+          fetch_size: 50
+        order_inserts: true
+        order_updates: true
+        use_sql_comments: true
 
   sql:
     init:
       mode: never
 
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      bootstrap-servers: localhost:9092
+      group-id: movietime-consumer-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: true
+    properties:
+      # Transactional guarantees
+      enable.idempotence: true
+
+logging:
+  level:
+    root: INFO
+    com.movie: DEBUG
+    org.springframework.kafka: INFO
+    org.apache.kafka: WARN
+    org.hibernate.tool.schema: INFO
+
 server:
   port: 8080
+#  servlet:
+#    context-path: /api
+
+#    mvc:
+#      format:
+#        date-time: yyyy-MM-dd'T'HH:mm:ss
