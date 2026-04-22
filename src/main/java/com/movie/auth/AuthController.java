@@ -21,7 +21,8 @@ public class AuthController {
         return authService.signup(
                 request.getName(),
                 request.getEmail(),
-                request.getPassword()
+                request.getPassword(), String.valueOf(request.getRole()),request.getBusinessName()
+
         );
     }
 
