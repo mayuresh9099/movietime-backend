@@ -1,6 +1,10 @@
 package com.movie.auth;
 
+import com.movie.module.user.LoginRequest;
+import com.movie.module.user.SignupRequest;
+import com.movie.module.user.dto.AuthResponse;
 import org.springframework.web.bind.annotation.*;
+
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -12,17 +16,20 @@ public class AuthController {
     }
 
     @PostMapping("/signup")
-    public String signup(@RequestParam String name,
-                         @RequestParam String email,
-                         @RequestParam String password) {
+    public String signup(@RequestBody SignupRequest request) {
 
-        return authService.signup(name, email, password);
+        return authService.signup(
+                request.getName(),
+                request.getEmail(),
+                request.getPassword()
+        );
     }
 
     @PostMapping("/login")
-    public String login(@RequestParam String email,
-                        @RequestParam String password) {
-
-        return authService.login(email, password);
+    public AuthResponse login(@RequestBody LoginRequest request) {
+        return authService.login(
+                request.getEmail(),
+                request.getPassword()
+        );
     }
 }

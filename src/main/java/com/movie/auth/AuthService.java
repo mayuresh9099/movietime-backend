@@ -3,6 +3,7 @@ package com.movie.auth;
 import com.movie.common.util.JwtUtil;
 import com.movie.module.user.Role;
 import com.movie.module.user.UserRepository;
+import com.movie.module.user.dto.AuthResponse;
 import com.movie.module.user.entities.User;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -38,7 +39,7 @@ public class AuthService {
         return "User registered successfully";
     }
 
-    public String login(String email, String password) {
+    public AuthResponse login(String email, String password) {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -47,6 +48,11 @@ public class AuthService {
             throw new RuntimeException("Invalid credentials");
         }
 
-        return JwtUtil.generateToken(user.getEmail());
+        String token = JwtUtil.generateToken(user.getEmail());
+
+        return AuthResponse.builder()
+                .token(token)
+                .email(user.getEmail())
+                .build();
     }
 }

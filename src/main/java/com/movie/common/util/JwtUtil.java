@@ -9,7 +9,7 @@ import java.util.Date;
 
 public class JwtUtil {
 
-    private static final String SECRET = "test123";
+    private static final String SECRET = "mySuperSecureSecretKeyForJwtToken1234567890";
     private static final Key key = Keys.hmacShaKeyFor(SECRET.getBytes());
 
     public static String generateToken(String email) {
