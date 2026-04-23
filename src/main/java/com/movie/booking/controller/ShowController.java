@@ -1,6 +1,7 @@
 package com.movie.booking.controller;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.movie.common.util.model.SeatStatus;
 import com.movie.module.user.UserRepository;
 import com.movie.module.user.entities.User;
 import com.movie.theatrevendor.dto.CreateShowRequest;
@@ -18,6 +19,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -97,7 +99,7 @@ public class ShowController {
 
             Show show = Show.builder()
                     .theatre(theatre)
-                    .screenId(request.getScreenId()) // ✅ added
+                    .screenId(request.getScreenId())
                     .movieName(request.getMovieName())
                     .startTime(request.getStartTime())
                     .endTime(request.getEndTime())
@@ -107,9 +109,18 @@ public class ShowController {
                     .status(ShowStatus.ACTIVE)
                     .build();
 
-            showRepository.save(show);
+            // Save show first
+            Show savedShow = showRepository.save(show);
+            log.info("✅ Show saved with ID: {}", savedShow.getId());
 
-            return ResponseEntity.ok("Show created successfully");
+            // Create seats - simple loop
+            createSeats(savedShow, request.getTotalSeats());
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Show created successfully",
+                    "showId", savedShow.getId()
+            ));
 
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -195,8 +206,9 @@ public class ShowController {
         try {
             TheatreDetails theatre = theatreRepository.findById(theatreId)
                     .orElseThrow(() -> new RuntimeException("Theatre not found"));
-
-            List<Show> shows = showRepository.findByTheatreAndStatus(theatre, "ACTIVE");
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+            // Use enum instead of string
+            List<Show> shows = showRepository.findByTheatreAndStatus(theatre, ShowStatus.ACTIVE);
 
             List<Map<String, Object>> showsList = shows.stream()
                     .map(show -> {
@@ -204,8 +216,8 @@ public class ShowController {
                         Map<String, Object> showMap = new HashMap<>();
                         showMap.put("id", show.getId());
                         showMap.put("movieName", show.getMovieName());
-                        showMap.put("startTime", show.getStartTime());
-                        showMap.put("endTime", show.getEndTime());
+                        showMap.put("startTime", show.getStartTime().format(formatter));
+                        showMap.put("endTime", show.getEndTime().format(formatter));
                         showMap.put("availableSeats", availableSeats);
                         showMap.put("pricePerSeat", show.getPricePerSeat());
                         return showMap;
@@ -228,10 +240,90 @@ public class ShowController {
     }
 
     /**
-     * Helper method to create seats for a show
-     * Generates seat numbers in format: A1, A2, ... A10, B1, B2, etc.
+     * Utility endpoint to populate seats for existing shows that don't have seats
+     * POST /api/shows/populate-seats/{showId}
      */
-    private void createSeatsForShow(Show show, Integer totalSeats) {
+    @PostMapping("/populate-seats/{showId}")
+    public ResponseEntity<?> populateSeatsForExistingShow(@PathVariable Long showId) {
+        try {
+            Show show = showRepository.findById(showId)
+                    .orElseThrow(() -> new RuntimeException("Show not found"));
+
+            // Check if seats already exist
+            int seatCount = seatRepository.countAvailableSeats(show);
+            if (seatCount > 0) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of(
+                                "success", false,
+                                "message", "Seats already exist for this show",
+                                "existingSeats", seatCount
+                        ));
+            }
+
+            // Create seats
+            createSeats(show, show.getTotalSeats());
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Seats populated successfully",
+                    "showId", showId,
+                    "totalSeats", show.getTotalSeats()
+            ));
+
+        } catch (Exception e) {
+            log.error("❌ Error populating seats: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                            "success", false,
+                            "error", e.getMessage()
+                    ));
+        }
+    }
+
+    /**
+     * Debug endpoint to check repository status
+     * GET /api/shows/debug/{showId}
+     */
+    @GetMapping("/debug/{showId}")
+    public ResponseEntity<?> debugShow(@PathVariable Long showId) {
+        try {
+            Show show = showRepository.findById(showId)
+                    .orElseThrow(() -> new RuntimeException("Show not found"));
+
+            // Check seat repository
+            List<Seat> allSeats = seatRepository.findAll();
+            List<Seat> showSeats = seatRepository.findByShowAndStatus(show, "AVAILABLE");
+            Integer availableCount = seatRepository.countAvailableSeats(show);
+
+            return ResponseEntity.ok(Map.of(
+                    "show", Map.of(
+                            "id", show.getId(),
+                            "movieName", show.getMovieName(),
+                            "totalSeats", show.getTotalSeats(),
+                            "table", "shows_new"
+                    ),
+                    "repositoryStatus", Map.of(
+                            "totalSeatsInDB", allSeats.size(),
+                            "seatsForThisShow", showSeats.size(),
+                            "availableCount", availableCount,
+                            "seatRepositoryType", seatRepository.getClass().getSimpleName()
+                    ),
+                    "sampleSeats", allSeats.stream().limit(3).map(seat ->
+                            Map.of("id", seat.getId(), "seatNumber", seat.getSeatNumber(), "status", seat.getStatus())
+                    ).collect(Collectors.toList())
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                            "error", e.getMessage(),
+                            "stackTrace", e.toString()
+                    ));
+        }
+    }
+
+    // Simple seat creation - no batch complexity
+    private void createSeats(Show show, Integer totalSeats) {
         int seatsPerRow = 10;
         int seatCount = 0;
 
@@ -241,17 +333,20 @@ public class ShowController {
 
             for (int j = 1; j <= seatsInThisRow; j++) {
                 String seatNumber = row + String.valueOf(j);
-                Seat seat = Seat.builder()
-                        .show(show)
-                        .seatNumber(seatNumber)
-                        .status("AVAILABLE")
-                        .build();
+
+                Seat seat = new Seat();
+                seat.setShow(show);
+                seat.setSeatNumber(seatNumber);
+                seat.setStatus(SeatStatus.AVAILABLE);
+                seat.setVersion(0L);
+
                 seatRepository.save(seat);
                 seatCount++;
+
+                log.debug("✅ Seat created: {} for show: {}", seatNumber, show.getId());
             }
         }
-
-        log.info("✅ Created {} seats for show: {}", totalSeats, show.getId());
+        log.info("✅ Total {} seats created for show: {}", totalSeats, show.getId());
     }
 
     /*// Request DTO

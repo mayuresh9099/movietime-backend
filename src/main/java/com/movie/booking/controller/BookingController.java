@@ -6,6 +6,7 @@ import com.movie.theatrevendor.dto.BookingResponseDTO;
 import com.movie.theatrevendor.dto.BookingStatusDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -106,19 +107,24 @@ public class BookingController {
      * Cancel a booking
      * POST /api/bookings/{bookingId}/cancel
      */
-    @PostMapping("/{bookingId}/cancel")
+    @PatchMapping("/{bookingId}/cancel")
     public ResponseEntity<?> cancelBooking(
             @PathVariable Long bookingId,
-            @RequestParam(defaultValue = "User requested cancellation") String reason) {
+            @RequestParam(defaultValue = "User requested cancellation") String reason,
+            Principal principal) {
 
         try {
-            String result = bookingService.cancelBooking(bookingId, reason);
+            BookingStatusDTO response =
+                    bookingService.cancelBooking(bookingId, reason, principal.getName());
+
             return ResponseEntity.ok(Map.of(
                     "success", true,
-                    "message", result,
-                    "bookingId", bookingId
+                    "message", "Booking cancelled successfully",
+                    "data", response
             ));
+
         } catch (Exception e) {
+
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of(
                             "success", false,

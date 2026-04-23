@@ -46,11 +46,11 @@ public class Booking {
     @Column(nullable = false)
     private Double totalPrice;
 
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
     private BookingStatus bookingStatus = BookingStatus.PENDING;
-
     @Column
     private String paymentTransactionId; // Reference to payment provider
 

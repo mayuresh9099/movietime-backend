@@ -1,6 +1,7 @@
 package com.movie.theatrevendor.repository;
 
 import com.movie.theatrevendor.model.Show;
+import com.movie.theatrevendor.model.ShowStatus;
 import com.movie.theatrevendor.model.TheatreDetails;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -14,7 +15,7 @@ import java.util.List;
 public interface ShowRepository extends JpaRepository<Show, Long> {
     List<Show> findByTheatre(TheatreDetails theatre);
 
-    List<Show> findByTheatreAndStatus(TheatreDetails theatre, String status);
+    List<Show> findByTheatreAndStatus(TheatreDetails theatre, ShowStatus status);
 
     @Query("SELECT s FROM Show s WHERE s.theatre = ?1 AND s.startTime BETWEEN ?2 AND ?3")
     List<Show> findShowsBetweenDates(TheatreDetails theatre, LocalDateTime startTime, LocalDateTime endTime);

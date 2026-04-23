@@ -32,6 +32,9 @@ public class TheatreService {
     @Transactional
     public String createTheatre(TheatreDetails theatre, String email) {
 
+        // Debug: Log method entry
+        System.out.println("🎬 Starting theatre creation for email: " + email);
+
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -42,6 +45,8 @@ public class TheatreService {
         Owner owner = ownerRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new RuntimeException("Owner profile not found"));
 
+        System.out.println("✅ Found owner: " + owner.getBusinessName() + ", verified: " + owner.getIsVerified());
+
         if (theatreRepository.findByOwner(owner).isPresent()) {
             throw new RuntimeException("Theatre already exists");
         }
@@ -51,10 +56,29 @@ public class TheatreService {
         theatre.setOwner(owner);
         theatre.setStatus(TheatreStatus.PENDING);
 
+        System.out.println("🔄 About to save theatre: " + theatre.getName());
+
         TheatreDetails saved = theatreRepository.save(theatre);
 
-        // Kafka event
-        kafkaTemplate.send("theatre-events", "THEATRE_CREATED: " + saved.getId());
+        System.out.println("✅ Theatre saved with ID: " + saved.getId());
+
+        // Force flush to ensure it's in database
+        theatreRepository.flush();
+
+        // Verify immediately
+        TheatreDetails verify = theatreRepository.findById(saved.getId()).orElse(null);
+        if (verify == null) {
+            throw new RuntimeException("CRITICAL: Theatre save failed - not found after save!");
+        }
+
+        System.out.println("✅ Theatre verified in database: " + verify.getName());
+
+        // Kafka event (optional)
+        try {
+            kafkaTemplate.send("theatre-events", "THEATRE_CREATED: " + saved.getId());
+        } catch (Exception e) {
+            System.out.println("⚠️ Kafka event failed, but theatre was saved: " + e.getMessage());
+        }
 
         return "Theatre submitted for approval";
     }

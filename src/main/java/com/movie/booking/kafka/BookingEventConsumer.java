@@ -3,6 +3,7 @@ package com.movie.booking.kafka;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.movie.booking.event.BookingCancelledEvent;
 import com.movie.booking.event.BookingConfirmedEvent;
+import com.movie.common.util.model.SeatStatus;
 import com.movie.theatrevendor.model.Booking;
 import com.movie.theatrevendor.model.Seat;
 import com.movie.theatrevendor.repository.BookingRepository;
@@ -45,7 +46,7 @@ public class BookingEventConsumer {
                 Optional<Booking> booking = bookingRepository.findById(event.getBookingId());
                 if (booking.isPresent()) {
                     for (Seat seat : booking.get().getSeats()) {
-                        seat.setStatus("BOOKED");
+                        seat.setStatus(SeatStatus.BOOKED);
                         seat.setBookingId(event.getBookingId());
                         seatRepository.save(seat);
                     }
@@ -71,7 +72,7 @@ public class BookingEventConsumer {
                 Optional<Booking> booking = bookingRepository.findById(event.getBookingId());
                 if (booking.isPresent()) {
                     for (Seat seat : booking.get().getSeats()) {
-                        seat.setStatus("AVAILABLE");
+                        seat.setStatus(SeatStatus.AVAILABLE);
                         seat.setBookingId(null);
                         seatRepository.save(seat);
                     }

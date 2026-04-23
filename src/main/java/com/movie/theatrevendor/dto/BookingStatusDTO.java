@@ -14,9 +14,16 @@ import java.util.List;
 @Builder
 public class BookingStatusDTO {
     private Long bookingId;
-    private String bookingStatus;
+    private String status;
+
+    private String movieName;
+    private LocalDateTime showTime;
+    private String theatre;
+
     private List<String> bookedSeats;
     private Double totalPrice;
+
+
     private LocalDateTime confirmedAt;
     private LocalDateTime cancelledAt;
 }

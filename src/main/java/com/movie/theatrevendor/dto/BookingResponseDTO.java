@@ -21,5 +21,6 @@ public class BookingResponseDTO {
     private String bookingStatus;
     private LocalDateTime bookingTime;
     private String message;
+    private List<String> seats;
 }
 

@@ -36,6 +36,12 @@ public class AdminService {
 
     public String approveTheatre(Long theatreId) {
 
+        // Debug: Check if theatre exists
+        boolean exists = theatreRepository.existsById(theatreId);
+        if (!exists) {
+            throw new RuntimeException("Theatre with ID " + theatreId + " does not exist in database");
+        }
+
         TheatreDetails theatre = theatreRepository.findById(theatreId)
                 .orElseThrow(() -> new RuntimeException("Theatre not found"));
 
@@ -70,5 +76,25 @@ public class AdminService {
         theatreRepository.save(theatre);
 
         return "Theatre rejected";
+    }
+
+    // Debug method to check all theatres
+    public List<TheatreDetails> getAllTheatres() {
+        return theatreRepository.findAll();
+    }
+
+    // Debug methods for database status
+    public long getUserCount() {
+        // This would need UserRepository injection, but for now return 0
+        return 0;
+    }
+
+    public long getOwnerCount() {
+        // This would need OwnerRepository injection, but for now return 0
+        return 0;
+    }
+
+    public long getTheatreCount() {
+        return theatreRepository.count();
     }
 }

@@ -31,4 +31,24 @@ public class AdminController {
     public String reject(@PathVariable Long id) {
         return adminService.rejectTheatre(id);
     }
+
+    @GetMapping("/theatres/all")
+    public List<TheatreDetails> getAll() {
+        return adminService.getAllTheatres();
+    }
+
+    // Debug endpoint to test database connection
+    @GetMapping("/debug/db")
+    public String debugDatabase() {
+        try {
+            long userCount = adminService.getUserCount();
+            long ownerCount = adminService.getOwnerCount();
+            long theatreCount = adminService.getTheatreCount();
+
+            return String.format("DB Status: Users=%d, Owners=%d, Theatres=%d",
+                    userCount, ownerCount, theatreCount);
+        } catch (Exception e) {
+            return "DB Error: " + e.getMessage();
+        }
+    }
 }
