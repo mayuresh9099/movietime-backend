@@ -1,10 +1,9 @@
 package com.movie.booking.service;
 
-import com.movie.booking.event.BookingCancelledEvent;
 import com.movie.booking.event.BookingConfirmedEvent;
 import com.movie.booking.event.NotificationEvent;
 import com.movie.booking.kafka.BookingEventProducer;
-import com.movie.common.util.model.SeatStatus;
+import com.movie.theatrevendor.model.SeatStatus;
 import com.movie.module.user.UserRepository;
 import com.movie.module.user.entities.User;
 import com.movie.theatrevendor.dto.BookingRequestDTO;
@@ -12,14 +11,13 @@ import com.movie.theatrevendor.dto.BookingResponseDTO;
 import com.movie.theatrevendor.dto.BookingStatusDTO;
 import com.movie.theatrevendor.model.*;
 import com.movie.theatrevendor.repository.BookingRepository;
+import com.movie.theatrevendor.repository.BookingSeatRepository;
 import com.movie.theatrevendor.repository.SeatRepository;
 import com.movie.theatrevendor.repository.ShowRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -27,11 +25,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
-import static com.movie.common.util.model.SeatStatus.AVAILABLE;
-import static com.movie.common.util.model.SeatStatus.BOOKED;
 
 @Slf4j
 @Service
@@ -41,19 +37,16 @@ public class BookingService {
     private final SeatRepository seatRepository;
     private final ShowRepository showRepository;
     private final UserRepository userRepository;
-    private final BookingEventProducer eventProducer;
+    private final BookingSeatRepository bookingSeatRepository;
 
-    public BookingService(BookingRepository bookingRepository,
-                         SeatRepository seatRepository,
-                         ShowRepository showRepository,
-                         UserRepository userRepository,
-                         BookingEventProducer eventProducer) {
+    public BookingService(BookingRepository bookingRepository, SeatRepository seatRepository, ShowRepository showRepository, UserRepository userRepository, BookingSeatRepository bookingSeatRepository) {
         this.bookingRepository = bookingRepository;
         this.seatRepository = seatRepository;
         this.showRepository = showRepository;
         this.userRepository = userRepository;
-        this.eventProducer = eventProducer;
+        this.bookingSeatRepository = bookingSeatRepository;
     }
+
 
     /**
      * Step 1: CREATE BOOKING with PENDING status
@@ -67,191 +60,85 @@ public class BookingService {
     @Transactional
     public BookingResponseDTO createBooking(String userEmail, BookingRequestDTO requestDTO) {
 
-        log.info("🎬 Creating booking for user: {} with seats: {}", userEmail, requestDTO.getSeatNumbers());
+        User user = userRepository.findByEmail(userEmail).orElseThrow(() -> new RuntimeException("User not found"));
 
-        // 1️⃣ Fetch user
-        User user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new RuntimeException("User not found: " + userEmail));
+        Show show = showRepository.findById(requestDTO.getShowId()).orElseThrow(() -> new RuntimeException("Show not found"));
 
-        // 2️⃣ Fetch show
-        Show show = showRepository.findById(requestDTO.getShowId())
-                .orElseThrow(() -> new RuntimeException("Show not found: " + requestDTO.getShowId()));
-
-        // 3️⃣ Validate show status (ENUM FIX)
         if (show.getStatus() != ShowStatus.ACTIVE) {
-            throw new RuntimeException("Show is not available for booking");
+            throw new RuntimeException("Show not active");
         }
 
-        // 4️⃣ Lock & fetch available seats (PESSIMISTIC LOCK)
-        List<Seat> requestedSeats = seatRepository.findAvailableSeatsForBooking(
-                show,
-                requestDTO.getSeatNumbers()
-        );
+        // 🔒 Lock seats
+        List<Seat> seats = seatRepository.findAvailableSeatsForBooking(show, requestDTO.getSeatNumbers());
 
-        // 5️⃣ Validate seat availability
-        if (requestedSeats.size() != requestDTO.getSeatNumbers().size()) {
-            throw new RuntimeException("Some seats are not available. Please select different seats.");
+        if (seats.size() != requestDTO.getSeatNumbers().size()) {
+            throw new RuntimeException("Some seats not available");
         }
 
-        // 6️⃣ Calculate total price
-        double totalPrice = requestedSeats.size() * show.getPricePerSeat();
+        seats.forEach(seat -> {
+            seat.setStatus(SeatStatus.LOCKED);
+            seat.setLockedAt(LocalDateTime.now());
+        });
 
-        // 7️⃣ Lock seats
-        for (Seat seat : requestedSeats) {
-            seat.setStatus(SeatStatus.LOCKED); // ✅ ENUM
-        }
-        seatRepository.saveAll(requestedSeats);
+        seatRepository.saveAll(seats);
 
-        // 8️⃣ Create booking (PENDING)
-        Booking booking = Booking.builder()
-                .user(user)
-                .show(show)
-                .seats(requestedSeats)
-                .numberOfSeats(requestedSeats.size())
-                .totalPrice(totalPrice)
-                .bookingStatus(BookingStatus.PENDING)
-                .paymentTransactionId(UUID.randomUUID().toString())
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
+        double totalPrice = seats.size() * show.getPricePerSeat();
 
-        Booking savedBooking = bookingRepository.save(booking);
+        Booking booking = bookingRepository.save(Booking.builder().user(user).show(show).numberOfSeats(seats.size()).totalPrice(totalPrice).bookingStatus(BookingStatus.PENDING).paymentTransactionId(UUID.randomUUID().toString()).createdAt(LocalDateTime.now()).build());
 
-        log.info("✅ Booking created with ID: {} | Seats: {}", savedBooking.getId(), requestDTO.getSeatNumbers());
+        // ✅ CREATE MAPPING
+        List<BookingSeat> mappings = seats.stream().map(seat -> BookingSeat.builder().id(new BookingSeat.BookingSeatId(booking.getId(), seat.getId())).booking(booking).seat(seat).build()).toList();
 
-        // 9️⃣ Simulate payment
-        boolean paymentSuccess = simulatePaymentProcessing(savedBooking);
+        bookingSeatRepository.saveAll(mappings);
 
-        if (!paymentSuccess) {
-            cancelBooking(savedBooking.getId(), "Payment Failed");
-            throw new RuntimeException("Payment failed. Booking cancelled.");
+        // simulate payment
+        if (!simulatePaymentProcessing(booking)) {
+            cancelBookingInternal(booking.getId(), "Payment failed");
+            throw new RuntimeException("Payment failed");
         }
 
-        // 🔟 Confirm booking
-        return confirmBooking(savedBooking.getId());
+        return confirmBooking(booking.getId());
     }
-    /**
-     * STEP 3: Confirm booking after successful payment
-     * Publishes BookingConfirmedEvent to Kafka
-     * Kafka consumer updates seat availability
-     */
-
 
     @Transactional
     public BookingResponseDTO confirmBooking(Long bookingId) {
 
-        log.info("💳 Confirming booking: {}", bookingId);
+        Booking booking = bookingRepository.findById(bookingId).orElseThrow(() -> new RuntimeException("Booking not found"));
 
-        // 1️⃣ Fetch booking
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Booking not found"));
-
-        // 2️⃣ ✅ Idempotency (VERY IMPORTANT)
         if (booking.getBookingStatus() == BookingStatus.CONFIRMED) {
-            log.warn("⚠️ Booking already confirmed: {}", bookingId);
-            return buildBookingResponse(booking, "Booking already confirmed");
+            return buildBookingResponse(booking, "Already confirmed");
         }
 
-        // 3️⃣ Prevent invalid transitions
-        if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
-            throw new RuntimeException("Cannot confirm a cancelled booking");
-        }
+            List<BookingSeat> bookingSeats = bookingSeatRepository.findByBookingId(bookingId);
 
-        // 4️⃣ Validate show timing
-        if (booking.getShow().getEndTime().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Cannot confirm booking for completed show");
-        }
+        List<Seat> seats = bookingSeats.stream().map(BookingSeat::getSeat).toList();
 
-        // 5️⃣ Validate and update seat status
-        // 1️⃣ Validate all seats first
-        for (Seat seat : booking.getSeats()) {
-
-            if (seat.getStatus() == null) {
-                throw new RuntimeException("Seat " + seat.getSeatNumber() + " has invalid status");
-            }
-
+        for (Seat seat : seats) {
             if (seat.getStatus() != SeatStatus.LOCKED) {
-
-                String reason = switch (seat.getStatus()) {
-                    case AVAILABLE -> "not reserved";
-                    case BOOKED -> "already booked";
-                    default -> "in invalid state";
-                };
-
-                throw new RuntimeException(
-                        "Seat " + seat.getSeatNumber() + " is " + reason
-                );
+                throw new RuntimeException("Seat not in LOCKED state");
             }
+            seat.setStatus(SeatStatus.BOOKED);
+            seat.setLockedAt(null);
         }
 
-        seatRepository.saveAll(booking.getSeats());
+        seatRepository.saveAll(seats);
 
-        // 6️⃣ Update booking
         booking.setBookingStatus(BookingStatus.CONFIRMED);
         booking.setConfirmedAt(LocalDateTime.now());
 
-        Booking confirmedBooking = bookingRepository.save(booking);
+        bookingRepository.save(booking);
 
-        // 7️⃣ Extract seat numbers (single source of truth)
-        List<String> seatNumbers = confirmedBooking.getSeats()
-                .stream()
-                .map(Seat::getSeatNumber)
-                .toList();
-
-        // 8️⃣ Prepare events (but DO NOT publish yet)
-        BookingConfirmedEvent event = BookingConfirmedEvent.builder()
-                .bookingId(confirmedBooking.getId())
-                .userId(confirmedBooking.getUser().getId())
-                .userEmail(confirmedBooking.getUser().getEmail())
-                .movieName(confirmedBooking.getShow().getMovieName())
-                .bookedSeats(seatNumbers)
-                .totalPrice(confirmedBooking.getTotalPrice())
-                .eventTime(LocalDateTime.now())
-                .build();
-
-        NotificationEvent notification = NotificationEvent.builder()
-                .userId(confirmedBooking.getUser().getId())
-                .userEmail(confirmedBooking.getUser().getEmail())
-                .messageType("BOOKING_CONFIRMED")
-                .message(String.format(
-                        "Your booking for %s is confirmed. Booking ID: %d | Seats: %s",
-                        confirmedBooking.getShow().getMovieName(),
-                        bookingId,
-                        String.join(", ", seatNumbers)
-                ))
-                .eventTime(LocalDateTime.now())
-                .build();
-
-        // 9️⃣ ✅ Publish AFTER transaction commit (CRITICAL)
-        TransactionSynchronizationManager.registerSynchronization(
-                new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        eventProducer.publishBookingConfirmedEvent(event);
-                        eventProducer.publishNotificationEvent(notification);
-                    }
-                }
-        );
-
-        log.info("✅ Booking confirmed: {} | Seats: {} | Price: ₹{}",
-                bookingId,
-                String.join(", ", seatNumbers),
-                confirmedBooking.getTotalPrice());
-
-        // 🔟 Return response
-        return buildBookingResponse(confirmedBooking, "Booking confirmed successfully!");
+        return buildBookingResponse(booking, "Booking confirmed");
     }
+
     /**
      * Get booking details
      */
     public BookingStatusDTO getBookingStatus(Long bookingId) {
-        Authentication auth = SecurityContextHolder
-                .getContext()
-                .getAuthentication();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String userEmail = auth.getName();
         // 1️⃣ Fetch booking
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Booking not found"));
+        Booking booking = bookingRepository.findById(bookingId).orElseThrow(() -> new RuntimeException("Booking not found"));
 
         // 2️⃣ 🔐 Authorization check
         if (!booking.getUser().getEmail().equals(userEmail)) {
@@ -259,16 +146,13 @@ public class BookingService {
         }
 
         // 3️⃣ Extract seat numbers safely
-        List<String> seatNumbers = booking.getSeats() == null
-                ? Collections.emptyList()
-                : booking.getSeats().stream()
-                  .map(Seat::getSeatNumber)
-                  .toList();
+        List<String> seatNumbers = bookingSeatRepository
+                .findSeatNumbersByBookingId(booking.getId());
 
-        // 4️⃣ Build response
+// 4️⃣ Build response
         return BookingStatusDTO.builder()
                 .bookingId(booking.getId())
-                .status(booking.getBookingStatus().toString()) // cleaner than name()
+                .status(booking.getBookingStatus().toString())
                 .movieName(booking.getShow().getMovieName())
                 .showTime(booking.getShow().getStartTime())
                 .theatre(booking.getShow().getTheatre().getName())
@@ -283,32 +167,41 @@ public class BookingService {
      * Get all bookings for a user
      */
     public List<BookingStatusDTO> getUserBookings(String userEmail) {
+
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        return bookingRepository.findByUser(user).stream()
+        // 1️⃣ Fetch all bookings ONCE
+        List<Booking> bookings = bookingRepository.findByUser(user);
+
+        // 2️⃣ Fetch all seat mappings ONCE
+        Map<Long, List<String>> bookingSeatMap = bookingSeatRepository
+                .findSeatNumbersByUser(user)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        row -> (Long) row[0],
+                        Collectors.mapping(row -> (String) row[1], Collectors.toList())
+                ));
+
+        // 3️⃣ Build response
+        return bookings.stream()
                 .map(booking -> BookingStatusDTO.builder()
                         .bookingId(booking.getId())
                         .status(booking.getBookingStatus().name())
-                        .bookedSeats(booking.getSeats().stream()
-                                .map(Seat::getSeatNumber)
-                                .collect(Collectors.toList()))
+                        .bookedSeats(bookingSeatMap.getOrDefault(booking.getId(), List.of()))
                         .totalPrice(booking.getTotalPrice())
                         .confirmedAt(booking.getConfirmedAt())
                         .cancelledAt(booking.getCancelledAt())
                         .build())
-                .collect(Collectors.toList());
+                .toList();
     }
-
-
 
     /**
      * Simulate payment processing
      * In production: integrate with Stripe, PayPal, RazorPay, etc.
      */
     private boolean simulatePaymentProcessing(Booking booking) {
-        log.info("💰 Processing payment for booking: {} | Amount: ₹{}",
-                booking.getId(), booking.getTotalPrice());
+        log.info("💰 Processing payment for booking: {} | Amount: ₹{}", booking.getId(), booking.getTotalPrice());
 
         try {
             // Simulate payment API call (90% success rate for demo)
@@ -328,22 +221,31 @@ public class BookingService {
     }
 
     @Transactional
-    public void cancelBooking(Long bookingId, String reason) {
+    public void cancelBookingInternal(Long bookingId, String reason) {
 
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Booking not found"));
+        Booking booking = bookingRepository.findById(bookingId).orElseThrow(() -> new RuntimeException("Booking not found"));
+
+        List<BookingSeat> bookingSeats = bookingSeatRepository.findByBookingId(bookingId);
+
+        List<Seat> seats = bookingSeats.stream().map(BookingSeat::getSeat).toList();
+
+        seats.forEach(seat -> {
+            seat.setStatus(SeatStatus.AVAILABLE);
+            seat.setLockedAt(null);
+        });
+
+        seatRepository.saveAll(seats);
+
+        bookingSeatRepository.deleteByBookingId(bookingId);
 
         booking.setBookingStatus(BookingStatus.CANCELLED);
-        booking.setUpdatedAt(LocalDateTime.now());
+        booking.setCancelledAt(LocalDateTime.now());
 
-        // Release seats
-        for (Seat seat : booking.getSeats()) {
-            seat.setStatus(SeatStatus.AVAILABLE);
-        }
-        seatRepository.saveAll(booking.getSeats());
+        bookingRepository.save(booking);
 
-        log.warn("⚠️ Booking {} cancelled due to: {}", bookingId, reason);
+        log.warn("Booking {} cancelled: {}", bookingId, reason);
     }
+
     /**
      * Build response DTO
      */
@@ -369,16 +271,30 @@ public class BookingService {
             throw new RuntimeException("Cannot cancel after show has started");
         }
 
-        // 🔄 Update booking
-        booking.setBookingStatus(BookingStatus.CANCELLED);
-        booking.setCancelledAt(LocalDateTime.now());
+        // 🔓 Fetch seats via mapping (CORRECT)
+        List<BookingSeat> bookingSeats = bookingSeatRepository
+                .findByBookingId(booking.getId());
 
-        // 🔓 Release seats
-        for (Seat seat : booking.getSeats()) {
+        List<Seat> seats = bookingSeats.stream()
+                .map(BookingSeat::getSeat)
+                .toList();
+
+        // 🔄 Release seats
+        for (Seat seat : seats) {
             seat.setStatus(SeatStatus.AVAILABLE);
+            seat.setLockedAt(null);
         }
 
-        seatRepository.saveAll(booking.getSeats());
+        seatRepository.saveAll(seats);
+
+        // ❗ Remove mapping
+        bookingSeatRepository.deleteByBookingId(booking.getId());
+
+        // 🔄 Update booking (ONLY ONCE)
+        booking.setBookingStatus(BookingStatus.CANCELLED);
+        booking.setCancelledAt(LocalDateTime.now());
+        booking.setUpdatedAt(LocalDateTime.now());
+
         bookingRepository.save(booking);
 
         return buildBookingStatusDTO(booking, "Booking cancelled successfully");
@@ -386,8 +302,10 @@ public class BookingService {
 
     private BookingStatusDTO buildBookingStatusDTO(Booking booking, String message) {
 
-        List<String> seats = booking.getSeats().stream()
-                .map(Seat::getSeatNumber)
+        List<String> seats = bookingSeatRepository
+                .findByBookingId(booking.getId())
+                .stream()
+                .map(bs -> bs.getSeat().getSeatNumber())
                 .toList();
 
         return BookingStatusDTO.builder()
@@ -404,13 +322,16 @@ public class BookingService {
     }
 
     private BookingResponseDTO buildBookingResponse(Booking booking, String message) {
+        List<String> seats = bookingSeatRepository
+                .findByBookingId(booking.getId())
+                .stream()
+                .map(bs -> bs.getSeat().getSeatNumber())
+                .toList();
         return BookingResponseDTO.builder()
                 .bookingId(booking.getId())
                 .movieName(booking.getShow().getMovieName())
-                .bookedSeats(booking.getSeats().stream()
-                        .map(Seat::getSeatNumber)
-                        .collect(Collectors.toList()))
-                .numberOfSeats(booking.getNumberOfSeats())
+                .bookedSeats(seats)
+                .numberOfSeats(seats.size())
                 .totalPrice(booking.getTotalPrice())
                 .bookingStatus(booking.getBookingStatus().name())
                 .bookingTime(booking.getCreatedAt())

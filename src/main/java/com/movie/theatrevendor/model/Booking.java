@@ -32,13 +32,8 @@ public class Booking {
     @JoinColumn(name = "show_id", nullable = false)
     private Show show;
 
-    @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(
-            name = "booking_seats",
-            joinColumns = @JoinColumn(name = "booking_id"),
-            inverseJoinColumns = @JoinColumn(name = "seat_id")
-    )
-    private List<Seat> seats;
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    private List<BookingSeat> bookingSeats;
 
     @Column(nullable = false)
     private Integer numberOfSeats;

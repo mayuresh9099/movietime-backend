@@ -1,7 +1,6 @@
 package com.movie.booking.controller;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-import com.movie.common.util.model.SeatStatus;
+import com.movie.theatrevendor.model.SeatStatus;
 import com.movie.module.user.UserRepository;
 import com.movie.module.user.entities.User;
 import com.movie.theatrevendor.dto.CreateShowRequest;
@@ -18,7 +17,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;

@@ -3,16 +3,19 @@ package com.movie.booking.kafka;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.movie.booking.event.BookingCancelledEvent;
 import com.movie.booking.event.BookingConfirmedEvent;
-import com.movie.common.util.model.SeatStatus;
+import com.movie.theatrevendor.model.BookingSeat;
+import com.movie.theatrevendor.model.SeatStatus;
 import com.movie.theatrevendor.model.Booking;
 import com.movie.theatrevendor.model.Seat;
 import com.movie.theatrevendor.repository.BookingRepository;
+import com.movie.theatrevendor.repository.BookingSeatRepository;
 import com.movie.theatrevendor.repository.SeatRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -22,13 +25,15 @@ public class BookingEventConsumer {
     private final SeatRepository seatRepository;
     private final BookingRepository bookingRepository;
     private final ObjectMapper objectMapper;
+    private final BookingSeatRepository bookingSeatRepository;
 
     public BookingEventConsumer(SeatRepository seatRepository,
                                 BookingRepository bookingRepository,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper, BookingSeatRepository bookingSeatRepository) {
         this.seatRepository = seatRepository;
         this.bookingRepository = bookingRepository;
         this.objectMapper = objectMapper;
+        this.bookingSeatRepository = bookingSeatRepository;
     }
 
     /**
@@ -38,47 +43,72 @@ public class BookingEventConsumer {
     @Transactional
     public void handleBookingConfirmed(String message) {
         try {
-            // Check if this is a confirmed event
             if (message.contains("booking-confirmed")) {
-                BookingConfirmedEvent event = objectMapper.readValue(message, BookingConfirmedEvent.class);
 
-                // Mark all seats as BOOKED
-                Optional<Booking> booking = bookingRepository.findById(event.getBookingId());
-                if (booking.isPresent()) {
-                    for (Seat seat : booking.get().getSeats()) {
-                        seat.setStatus(SeatStatus.BOOKED);
-                        seat.setBookingId(event.getBookingId());
-                        seatRepository.save(seat);
-                    }
-                    log.info("Seats marked as BOOKED for booking: {}", event.getBookingId());
+                BookingConfirmedEvent event =
+                        objectMapper.readValue(message, BookingConfirmedEvent.class);
+
+                Long bookingId = event.getBookingId();
+
+                // Get seats via mapping table
+                List<BookingSeat> bookingSeats =
+                        bookingSeatRepository.findByBookingId(bookingId);
+
+                List<Seat> seatsToUpdate = bookingSeats.stream()
+                        .map(BookingSeat::getSeat)
+                        .toList();
+
+                // Update status
+                for (Seat seat : seatsToUpdate) {
+                    seat.setStatus(SeatStatus.BOOKED);
+                    seat.setLockedAt(null); // optional cleanup
                 }
+
+                // Save in batch
+                seatRepository.saveAll(seatsToUpdate);
+
+                log.info("Seats marked as BOOKED for booking: {}", bookingId);
             }
+
         } catch (Exception e) {
             log.error("Error processing BookingConfirmedEvent: {}", message, e);
         }
     }
 
-    /**
-     * Consume BookingCancelledEvent and release seats
-     */
     @KafkaListener(topics = "booking-events", groupId = "booking-cancellation-group")
     @Transactional
     public void handleBookingCancelled(String message) {
         try {
             if (message.contains("booking-cancelled")) {
-                BookingCancelledEvent event = objectMapper.readValue(message, BookingCancelledEvent.class);
 
-                // Mark all seats as AVAILABLE again
-                Optional<Booking> booking = bookingRepository.findById(event.getBookingId());
-                if (booking.isPresent()) {
-                    for (Seat seat : booking.get().getSeats()) {
-                        seat.setStatus(SeatStatus.AVAILABLE);
-                        seat.setBookingId(null);
-                        seatRepository.save(seat);
-                    }
-                    log.info("Seats marked as AVAILABLE for booking cancellation: {}", event.getBookingId());
+                BookingCancelledEvent event =
+                        objectMapper.readValue(message, BookingCancelledEvent.class);
+
+                Long bookingId = event.getBookingId();
+
+                // Get seats via mapping table
+                List<BookingSeat> bookingSeats =
+                        bookingSeatRepository.findByBookingId(bookingId);
+
+                List<Seat> seats = bookingSeats.stream()
+                        .map(BookingSeat::getSeat)
+                        .toList();
+
+                // Update seats
+                for (Seat seat : seats) {
+                    seat.setStatus(SeatStatus.AVAILABLE);
+                    seat.setLockedAt(null);
                 }
+
+                // Batch save
+                seatRepository.saveAll(seats);
+
+                // Remove mapping
+                bookingSeatRepository.deleteByBookingId(bookingId);
+
+                log.info("Seats released for booking cancellation: {}", bookingId);
             }
+
         } catch (Exception e) {
             log.error("Error processing BookingCancelledEvent: {}", message, e);
         }

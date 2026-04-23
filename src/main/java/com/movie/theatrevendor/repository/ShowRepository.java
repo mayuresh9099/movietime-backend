@@ -32,5 +32,16 @@ public interface ShowRepository extends JpaRepository<Show, Long> {
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime
     );
+
+    @Query("""
+            SELECT s FROM Show s
+            WHERE s.theatre IN :theatres
+            AND s.status = :status
+            AND LOWER(s.movieName) LIKE LOWER(CONCAT('%', :movieName, '%'))
+            """)
+    List<Show> findShowsByTheatresAndMovie(List<TheatreDetails> theatres,
+                                           ShowStatus status,
+                                           String movieName);
+
 }
 

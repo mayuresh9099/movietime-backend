@@ -1,11 +1,12 @@
 package com.movie.theatrevendor.model;
 
-import com.movie.common.util.model.SeatStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "seats", uniqueConstraints = {
@@ -26,7 +27,7 @@ public class Seat {
     private Show show;
 
     @Column(nullable = false)
-    private String seatNumber; // E.g., "A1", "A2", "B1", etc.
+    private String seatNumber; //A1,C1
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
@@ -38,13 +39,15 @@ public class Seat {
     @Column(nullable = false)
     private Long version;
 
+    // Timestamp when seat was locked (for timeout handling)
     @Column
-    private Long bookingId; // Reference to booking that owns this seat
+    private LocalDateTime lockedAt;
 
     @PrePersist
     public void prePersist() {
-        this.status = SeatStatus.AVAILABLE;
-        this.version = 0L;
+        if (this.status == null) {
+            this.status = SeatStatus.AVAILABLE;
+        }
     }
 }
 
