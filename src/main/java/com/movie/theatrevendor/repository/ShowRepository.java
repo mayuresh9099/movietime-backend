@@ -59,28 +59,20 @@ public interface ShowRepository extends JpaRepository<Show, Long> {
     );*/
 
 
+
     @Query("""
-    SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END
-    FROM Show s
-    WHERE s.screen = :screen
-    AND (
-        :startTime < s.endTime AND :endTime > s.startTime
-    )
-""")
+                SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END
+                FROM Show s
+                WHERE s.screen.id = :screenId
+                AND s.status = 'ACTIVE'
+                AND (
+                    :startTime < s.endTime AND :endTime > s.startTime
+                )
+            """)
     boolean existsByScreenAndTimeOverlap(
-            @Param("screen") Screen screen,
+            @Param("screenId") Long screenId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime
     );
-    @Modifying
-    @Transactional
-    @Query("""
-    UPDATE ShowSeat ss
-    SET ss.status = 'AVAILABLE',
-        ss.lockedAt = null
-    WHERE ss.status = 'LOCKED'
-    AND ss.lockedAt < :threshold
-""")
-    int releaseExpiredLocksForAllShows(@Param("threshold") LocalDateTime threshold);
 }
 

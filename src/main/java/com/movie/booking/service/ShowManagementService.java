@@ -46,9 +46,17 @@ public class ShowManagementService {
         if (theatre.getStatus() != TheatreStatus.APPROVED) {
             throw new RuntimeException("Theatre not approved");
         }
+// ✅ Validate shows can span at most 2 calendar days (allows midnight shows like 9 PM → 12:30 AM)
+        if (request.getEndTime().toLocalDate().isAfter(request.getStartTime().toLocalDate().plusDays(1))) {
+            throw new RuntimeException("Show cannot span more than 2 calendar days");
+        }
 
+        // ✅ Validate max show duration (4 hours) - prevents unrealistic overnight shows
+        if (java.time.temporal.ChronoUnit.MINUTES.between(request.getStartTime(), request.getEndTime()) > 240) {
+            throw new RuntimeException("Show duration cannot exceed 4 hours");
+        }
         boolean exists = showRepository.existsByScreenAndTimeOverlap(
-                screen,
+                screen.getId(),
                 request.getStartTime(),
                 request.getEndTime()
         );
@@ -187,7 +195,7 @@ public class ShowManagementService {
 
         // ✅ Check time overlap
         boolean exists = showRepository.existsByScreenAndTimeOverlap(
-                screen,
+                screen.getId(),
                 request.getStartTime(),
                 request.getEndTime()
         );
@@ -216,6 +224,7 @@ public class ShowManagementService {
 
         return showRepository.findByTheatreOwner(owner);
     }
+
     @Transactional
     public void createSeatsForExistingShow(Long showId, String ownerEmail) {
 
