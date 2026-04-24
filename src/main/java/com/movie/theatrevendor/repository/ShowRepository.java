@@ -1,34 +1,34 @@
 package com.movie.theatrevendor.repository;
 
-import com.movie.theatrevendor.model.Show;
-import com.movie.theatrevendor.model.ShowStatus;
-import com.movie.theatrevendor.model.TheatreDetails;
+import com.movie.theatrevendor.model.*;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
 public interface ShowRepository extends JpaRepository<Show, Long> {
-    List<Show> findByTheatre(TheatreDetails theatre);
 
-    List<Show> findByTheatreAndStatus(TheatreDetails theatre, ShowStatus status);
+
+    List<Show> findByTheatreOwner(Owner owner);
 
     @Query("SELECT s FROM Show s WHERE s.theatre = ?1 AND s.startTime BETWEEN ?2 AND ?3")
     List<Show> findShowsBetweenDates(TheatreDetails theatre, LocalDateTime startTime, LocalDateTime endTime);
 
     @Query("""
-    SELECT COUNT(s) > 0
-    FROM Show s
-    WHERE s.screenId = :screenId
-    AND s.startTime < :endTime
-    AND s.endTime > :startTime
-""")
+                SELECT COUNT(s) > 0
+                FROM Show s
+                WHERE s.screen.id = :screenId
+                AND s.startTime < :endTime
+                AND s.endTime > :startTime
+            """)
     boolean existsByScreenIdAndTimeOverlap(
-            @Param("screenId") Long screenId,           // ✅ FIXED
+            @Param("screenId") Long screenId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime
     );
@@ -43,5 +43,29 @@ public interface ShowRepository extends JpaRepository<Show, Long> {
                                            ShowStatus status,
                                            String movieName);
 
+    @Query("""
+                SELECT COUNT(s) > 0 FROM Show s
+                WHERE s.screen = :screen
+                AND (
+                    (:startTime BETWEEN s.startTime AND s.endTime)
+                    OR (:endTime BETWEEN s.startTime AND s.endTime)
+                    OR (s.startTime BETWEEN :startTime AND :endTime)
+                )
+            """)
+    boolean existsByScreenAndTimeOverlap(
+            @Param("screen") Screen screen,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime
+    );
+    @Modifying
+    @Transactional
+    @Query("""
+    UPDATE ShowSeat ss
+    SET ss.status = 'AVAILABLE',
+        ss.lockedAt = null
+    WHERE ss.status = 'LOCKED'
+    AND ss.lockedAt < :threshold
+""")
+    int releaseExpiredLocksForAllShows(@Param("threshold") LocalDateTime threshold);
 }
 

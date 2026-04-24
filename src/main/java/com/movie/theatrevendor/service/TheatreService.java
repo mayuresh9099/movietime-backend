@@ -1,5 +1,6 @@
 package com.movie.theatrevendor.service;
 
+import com.movie.booking.service.ScreenRepository;
 import com.movie.module.user.Role;
 import com.movie.module.user.UserRepository;
 import com.movie.module.user.entities.User;
@@ -10,29 +11,34 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.IntStream;
+
 @Service
 public class TheatreService {
 
     private final UserRepository userRepository;
     private final OwnerRepository ownerRepository;
     private final TheatreRepository theatreRepository;
+    private final ScreenRepository screenRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     // ✅ Constructor Injection
     public TheatreService(UserRepository userRepository,
                           OwnerRepository ownerRepository,
-                          TheatreRepository theatreRepository,
+                          TheatreRepository theatreRepository, ScreenRepository screenRepository,
                           KafkaTemplate<String, String> kafkaTemplate) {
         this.userRepository = userRepository;
         this.ownerRepository = ownerRepository;
         this.theatreRepository = theatreRepository;
+        this.screenRepository = screenRepository;
         this.kafkaTemplate = kafkaTemplate;
     }
 
     @Transactional
     public String createTheatre(TheatreDetails theatre, String email) {
 
-        // Debug: Log method entry
         System.out.println("🎬 Starting theatre creation for email: " + email);
 
         User user = userRepository.findByEmail(email)
@@ -45,8 +51,6 @@ public class TheatreService {
         Owner owner = ownerRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new RuntimeException("Owner profile not found"));
 
-        System.out.println("✅ Found owner: " + owner.getBusinessName() + ", verified: " + owner.getIsVerified());
-
         if (theatreRepository.findByOwner(owner).isPresent()) {
             throw new RuntimeException("Theatre already exists");
         }
@@ -56,28 +60,23 @@ public class TheatreService {
         theatre.setOwner(owner);
         theatre.setStatus(TheatreStatus.PENDING);
 
-        System.out.println("🔄 About to save theatre: " + theatre.getName());
-
         TheatreDetails saved = theatreRepository.save(theatre);
 
-        System.out.println("✅ Theatre saved with ID: " + saved.getId());
-
-        // Force flush to ensure it's in database
         theatreRepository.flush();
 
-        // Verify immediately
-        TheatreDetails verify = theatreRepository.findById(saved.getId()).orElse(null);
-        if (verify == null) {
-            throw new RuntimeException("CRITICAL: Theatre save failed - not found after save!");
-        }
+        // ✅ VERIFY
+        TheatreDetails verify = theatreRepository.findById(saved.getId())
+                .orElseThrow(() -> new RuntimeException("Theatre save failed"));
 
-        System.out.println("✅ Theatre verified in database: " + verify.getName());
+        // ✅ 🔥 CREATE SCREENS HERE
+        createScreensForTheatre(saved);
 
-        // Kafka event (optional)
+        System.out.println("✅ Theatre + Screens created: " + saved.getId());
+
         try {
             kafkaTemplate.send("theatre-events", "THEATRE_CREATED: " + saved.getId());
         } catch (Exception e) {
-            System.out.println("⚠️ Kafka event failed, but theatre was saved: " + e.getMessage());
+            System.out.println("⚠️ Kafka failed: " + e.getMessage());
         }
 
         return "Theatre submitted for approval";
@@ -133,5 +132,33 @@ public class TheatreService {
         owner.setIsVerified(request.getIsVerified() != null ? request.getIsVerified() : false);
 
         return ownerRepository.save(owner);
+    }
+
+    private void createScreensForTheatre(TheatreDetails theatre) {
+
+        int totalScreens = theatre.getTotalScreens();
+
+        if (theatre.getTotalScreens() == null || theatre.getTotalScreens() <= 0) {
+            throw new RuntimeException("Invalid number of screens");
+        }
+
+        List<Screen> screens = IntStream.rangeClosed(1, theatre.getTotalScreens())
+                .mapToObj(i -> Screen.builder()
+                        .theatre(theatre)
+                        .name("Screen " + i)
+                        .totalSeats(
+                                theatre.getType() == TheatreType.MULTIPLEX ? 150 : 100
+                        ) // smarter default
+                        .status(ScreenStatus.ACTIVE)
+                        .type(ScreenType.STANDARD)
+                        .build()
+                )
+                .toList();
+
+        screenRepository.saveAll(screens);
+
+        screenRepository.saveAll(screens);
+
+        System.out.println("✅ " + totalScreens + " screens created for theatre " + theatre.getId());
     }
 }

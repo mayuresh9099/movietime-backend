@@ -1,14 +1,11 @@
 package com.movie.booking.controller;
 
-import com.movie.theatrevendor.model.SeatStatus;
+import com.movie.booking.service.ScreenRepository;
 import com.movie.module.user.UserRepository;
 import com.movie.module.user.entities.User;
 import com.movie.theatrevendor.dto.CreateShowRequest;
 import com.movie.theatrevendor.model.*;
-import com.movie.theatrevendor.repository.OwnerRepository;
-import com.movie.theatrevendor.repository.ShowRepository;
-import com.movie.theatrevendor.repository.SeatRepository;
-import com.movie.theatrevendor.repository.TheatreRepository;
+import com.movie.theatrevendor.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -17,10 +14,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -34,21 +30,11 @@ public class ShowController {
     private final TheatreRepository theatreRepository;
     private final UserRepository userRepository;
     private final OwnerRepository ownerRepository;
+    private final ScreenRepository screenRepository;
+    private final ShowSeatRepository showSeatRepository;
 
-    /**
-     * Create a new show
-     * POST /api/shows/create
-     *
-     * Request Body:
-     * {
-     *   "theatreId": 1,
-     *   "movieName": "Inception",
-     *   "startTime": "2026-04-25T19:00:00",
-     *   "endTime": "2026-04-25T22:00:00",
-     *   "totalSeats": 50,
-     *   "pricePerSeat": 250.0
-     * }
-     */
+    // ========================= CREATE SHOW =========================
+
     @PostMapping("/create")
     public ResponseEntity<?> createShow(@RequestBody CreateShowRequest request) {
         try {
@@ -56,9 +42,9 @@ public class ShowController {
             String username = auth.getName();
 
             if (request.getScreenId() == null) {
-                return ResponseEntity.badRequest()
-                        .body("screenId is required");
+                return ResponseEntity.badRequest().body("screenId is required");
             }
+
             User user = userRepository.findByEmail(username)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -69,35 +55,34 @@ public class ShowController {
                     .orElseThrow(() -> new RuntimeException("Theatre not found"));
 
             if (!theatre.getOwner().getId().equals(owner.getId())) {
-                return ResponseEntity.status(403)
-                        .body("You are not allowed to create shows for this theatre");
+                return ResponseEntity.status(403).body("Unauthorized");
             }
 
             if (theatre.getStatus() != TheatreStatus.APPROVED) {
-                return ResponseEntity.badRequest().body("Theatre is not approved");
+                return ResponseEntity.badRequest().body("Theatre not approved");
             }
 
-            // ✅ time validation
+            Screen screen = screenRepository
+                    .findByIdAndTheatreId(request.getScreenId(), request.getTheatreId())
+                    .orElseThrow(() -> new RuntimeException("Screen not found for this theatre"));
+
             if (request.getStartTime().isAfter(request.getEndTime())) {
-                return ResponseEntity.badRequest()
-                        .body("Start time must be before end time");
+                return ResponseEntity.badRequest().body("Invalid time");
             }
 
-            // ✅ overlap check
-            boolean exists = showRepository.existsByScreenIdAndTimeOverlap(
-                    request.getScreenId(),
+            boolean exists = showRepository.existsByScreenAndTimeOverlap(
+                    screen,
                     request.getStartTime(),
                     request.getEndTime()
             );
 
             if (exists) {
-                return ResponseEntity.badRequest()
-                        .body("Show timing overlaps on this screen");
+                return ResponseEntity.badRequest().body("Show overlap");
             }
 
             Show show = Show.builder()
                     .theatre(theatre)
-                    .screenId(request.getScreenId())
+                    .screen(screen)
                     .movieName(request.getMovieName())
                     .startTime(request.getStartTime())
                     .endTime(request.getEndTime())
@@ -107,267 +92,161 @@ public class ShowController {
                     .status(ShowStatus.ACTIVE)
                     .build();
 
-            // Save show first
             Show savedShow = showRepository.save(show);
-            log.info("✅ Show saved with ID: {}", savedShow.getId());
 
-            // Create seats - simple loop
-            createSeats(savedShow, request.getTotalSeats());
+            // ✅ Create seats only once per screen
+            if (seatRepository.countByScreen(screen) == 0) {
+                if (screen.getTotalSeats() == null || screen.getTotalSeats() == 0) {
+                    throw new RuntimeException("Screen has no seats configured");
+                }
+                createSeatsForScreen(screen);
+            }
+
+            // ✅ CRITICAL: Create ShowSeat mapping
+            createShowSeats(savedShow);
 
             return ResponseEntity.ok(Map.of(
                     "success", true,
-                    "message", "Show created successfully",
                     "showId", savedShow.getId()
             ));
 
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
-    /**
-     * Get available seats for a show
-     * GET /api/shows/{showId}/available-seats
-     */
+    // ========================= AVAILABLE SEATS =========================
+
     @GetMapping("/{showId}/available-seats")
     public ResponseEntity<?> getAvailableSeats(@PathVariable Long showId) {
-        try {
-            Show show = showRepository.findById(showId)
-                    .orElseThrow(() -> new RuntimeException("Show not found"));
 
-            List<Seat> availableSeats = seatRepository.findByShowAndStatus(show, "AVAILABLE");
-            Integer availableCount = seatRepository.countAvailableSeats(show);
+        List<ShowSeat> seats = showSeatRepository.findAvailableSeats(showId);
 
-            List<String> seatNumbers = availableSeats.stream()
-                    .map(Seat::getSeatNumber)
-                    .collect(Collectors.toList());
+        List<String> seatNumbers = seats.stream()
+                .map(ss -> ss.getSeat().getSeatNumber())
+                .toList();
 
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "showId", showId,
-                    "movieName", show.getMovieName(),
-                    "totalSeats", show.getTotalSeats(),
-                    "availableSeats", availableCount,
-                    "pricePerSeat", show.getPricePerSeat(),
-                    "availableSeatNumbers", seatNumbers
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of(
-                            "success", false,
-                            "error", e.getMessage()
-                    ));
-        }
+        return ResponseEntity.ok(Map.of(
+                "showId", showId,
+                "availableSeats", seatNumbers.size(),
+                "seats", seatNumbers
+        ));
     }
 
-    /**
-     * Get show details
-     * GET /api/shows/{showId}
-     */
+    // ========================= SHOW DETAILS =========================
+
     @GetMapping("/{showId}")
     public ResponseEntity<?> getShowDetails(@PathVariable Long showId) {
-        try {
-            Show show = showRepository.findById(showId)
-                    .orElseThrow(() -> new RuntimeException("Show not found"));
 
-            Integer availableSeats = seatRepository.countAvailableSeats(show);
+        Show show = showRepository.findById(showId)
+                .orElseThrow(() -> new RuntimeException("Show not found"));
 
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "show", Map.of(
-                            "id", show.getId(),
-                            "movieName", show.getMovieName(),
-                            "theatre", show.getTheatre().getName(),
-                            "startTime", show.getStartTime(),
-                            "endTime", show.getEndTime(),
-                            "totalSeats", show.getTotalSeats(),
-                            "availableSeats", availableSeats,
-                            "pricePerSeat", show.getPricePerSeat(),
-                            "status", show.getStatus()
-                    )
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of(
-                            "success", false,
-                            "error", e.getMessage()
-                    ));
-        }
+        Integer availableSeats = showSeatRepository.countAvailableSeats(showId);
+
+        return ResponseEntity.ok(Map.of(
+                "id", show.getId(),
+                "movie", show.getMovieName(),
+                "availableSeats", availableSeats
+        ));
     }
 
-    /**
-     * Get all shows for a theatre
-     * GET /api/shows/theatre/{theatreId}
-     */
-    @GetMapping("/theatre/{theatreId}")
-    public ResponseEntity<?> getShowsByTheatre(@PathVariable Long theatreId) {
-        try {
-            TheatreDetails theatre = theatreRepository.findById(theatreId)
-                    .orElseThrow(() -> new RuntimeException("Theatre not found"));
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
-            // Use enum instead of string
-            List<Show> shows = showRepository.findByTheatreAndStatus(theatre, ShowStatus.ACTIVE);
+    // ========================= DEBUG =========================
 
-            List<Map<String, Object>> showsList = shows.stream()
-                    .map(show -> {
-                        Integer availableSeats = seatRepository.countAvailableSeats(show);
-                        Map<String, Object> showMap = new HashMap<>();
-                        showMap.put("id", show.getId());
-                        showMap.put("movieName", show.getMovieName());
-                        showMap.put("startTime", show.getStartTime().format(formatter));
-                        showMap.put("endTime", show.getEndTime().format(formatter));
-                        showMap.put("availableSeats", availableSeats);
-                        showMap.put("pricePerSeat", show.getPricePerSeat());
-                        return showMap;
-                    })
-                    .collect(Collectors.toList());
-
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "theatre", theatre.getName(),
-                    "totalShows", showsList.size(),
-                    "shows", showsList
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of(
-                            "success", false,
-                            "error", e.getMessage()
-                    ));
-        }
-    }
-
-    /**
-     * Utility endpoint to populate seats for existing shows that don't have seats
-     * POST /api/shows/populate-seats/{showId}
-     */
-    @PostMapping("/populate-seats/{showId}")
-    public ResponseEntity<?> populateSeatsForExistingShow(@PathVariable Long showId) {
-        try {
-            Show show = showRepository.findById(showId)
-                    .orElseThrow(() -> new RuntimeException("Show not found"));
-
-            // Check if seats already exist
-            int seatCount = seatRepository.countAvailableSeats(show);
-            if (seatCount > 0) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of(
-                                "success", false,
-                                "message", "Seats already exist for this show",
-                                "existingSeats", seatCount
-                        ));
-            }
-
-            // Create seats
-            createSeats(show, show.getTotalSeats());
-
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Seats populated successfully",
-                    "showId", showId,
-                    "totalSeats", show.getTotalSeats()
-            ));
-
-        } catch (Exception e) {
-            log.error("❌ Error populating seats: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of(
-                            "success", false,
-                            "error", e.getMessage()
-                    ));
-        }
-    }
-
-    /**
-     * Debug endpoint to check repository status
-     * GET /api/shows/debug/{showId}
-     */
     @GetMapping("/debug/{showId}")
     public ResponseEntity<?> debugShow(@PathVariable Long showId) {
-        try {
-            Show show = showRepository.findById(showId)
-                    .orElseThrow(() -> new RuntimeException("Show not found"));
 
-            // Check seat repository
-            List<Seat> allSeats = seatRepository.findAll();
-            List<Seat> showSeats = seatRepository.findByShowAndStatus(show, "AVAILABLE");
-            Integer availableCount = seatRepository.countAvailableSeats(show);
+        Show show = showRepository.findById(showId)
+                .orElseThrow(() -> new RuntimeException("Show not found"));
 
-            return ResponseEntity.ok(Map.of(
-                    "show", Map.of(
-                            "id", show.getId(),
-                            "movieName", show.getMovieName(),
-                            "totalSeats", show.getTotalSeats(),
-                            "table", "shows_new"
-                    ),
-                    "repositoryStatus", Map.of(
-                            "totalSeatsInDB", allSeats.size(),
-                            "seatsForThisShow", showSeats.size(),
-                            "availableCount", availableCount,
-                            "seatRepositoryType", seatRepository.getClass().getSimpleName()
-                    ),
-                    "sampleSeats", allSeats.stream().limit(3).map(seat ->
-                            Map.of("id", seat.getId(), "seatNumber", seat.getSeatNumber(), "status", seat.getStatus())
-                    ).collect(Collectors.toList())
-            ));
+        List<ShowSeat> allShowSeats = showSeatRepository.findAvailableSeats(showId);
+        Integer availableCount = showSeatRepository.countAvailableSeats(showId);
+        List<Object[]> summary = showSeatRepository.getShowSeatSummary(showId);
 
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of(
-                            "error", e.getMessage(),
-                            "stackTrace", e.toString()
-                    ));
-        }
+        return ResponseEntity.ok(Map.of(
+                "show", Map.of(
+                        "id", show.getId(),
+                        "movieName", show.getMovieName()
+                ),
+                "stats", Map.of(
+                        "total", allShowSeats.size(),
+                        "available", availableCount
+                ),
+                "sample", allShowSeats.stream().limit(5).map(ss ->
+                        Map.of(
+                                "seat", ss.getSeat().getSeatNumber(),
+                                "status", ss.getStatus()
+                        )
+                ).toList()
+        ));
     }
 
-    // Simple seat creation - no batch complexity
-    private void createSeats(Show show, Integer totalSeats) {
+    // ========================= HELPERS =========================
+
+   /* private void createSeatsForScreen(Screen screen, Integer totalSeats) {
+
         int seatsPerRow = 10;
-        int seatCount = 0;
+        int count = 0;
 
-        for (int i = 0; i < (totalSeats / seatsPerRow) + 1; i++) {
+        for (int i = 0; count < totalSeats; i++) {
             char row = (char) ('A' + i);
-            int seatsInThisRow = Math.min(seatsPerRow, totalSeats - seatCount);
 
-            for (int j = 1; j <= seatsInThisRow; j++) {
-                String seatNumber = row + String.valueOf(j);
-
+            for (int j = 1; j <= seatsPerRow && count < totalSeats; j++) {
                 Seat seat = new Seat();
-                seat.setShow(show);
-                seat.setSeatNumber(seatNumber);
-                seat.setStatus(SeatStatus.AVAILABLE);
-                seat.setVersion(0L);
-
+                seat.setScreen(screen);
+                seat.setSeatNumber(row + String.valueOf(j));
                 seatRepository.save(seat);
-                seatCount++;
-
-                log.debug("✅ Seat created: {} for show: {}", seatNumber, show.getId());
+                count++;
             }
         }
-        log.info("✅ Total {} seats created for show: {}", totalSeats, show.getId());
+
+        log.info("Seats created for screen {}", screen.getId());
+    }*/
+
+    private void createSeatsForScreen(Screen screen) {
+
+        List<Seat> seats = new java.util.ArrayList<>();
+
+        int totalSeats = screen.getTotalSeats();
+
+        char row = 'A';
+        int seatNumber = 1;
+
+        for (int i = 0; i < totalSeats; i++) {
+
+            String seatLabel = row + String.valueOf(seatNumber);
+
+            seats.add(Seat.builder()
+                    .screen(screen)
+                    .seatNumber(seatLabel)
+                    .build());
+
+            seatNumber++;
+
+            if (seatNumber > 10) {  // 10 seats per row
+                seatNumber = 1;
+                row++;
+            }
+        }
+
+        seatRepository.saveAll(seats);
+
+        log.info("✅ Created {} seats for screen {}", seats.size(), screen.getId());
     }
 
-    /*// Request DTO
-    static class CreateShowRequest {
-        public Long theatreId;
-        public String movieName;
-        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-        public LocalDateTime startTime;
-        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-        public LocalDateTime endTime;
-        public Integer totalSeats;
-        public Double pricePerSeat;
+    private void createShowSeats(Show show) {
 
-        // Getters
-        public Long getTheatreId() { return theatreId; }
-        public String getMovieName() { return movieName; }
-        public LocalDateTime getStartTime() { return startTime; }
-        public LocalDateTime getEndTime() { return endTime; }
-        public Integer getTotalSeats() { return totalSeats; }
-        public Double getPricePerSeat() { return pricePerSeat; }
-    }*/
+        List<Seat> seats = seatRepository.findByScreen(show.getScreen());
+
+        List<ShowSeat> showSeats = seats.stream()
+                .map(seat -> ShowSeat.builder()
+                        .show(show)
+                        .seat(seat)
+                        .status(SeatStatus.AVAILABLE)
+                        .build())
+                .toList();
+
+        showSeatRepository.saveAll(showSeats);
+
+        log.info("ShowSeats created for show {}", show.getId());
+    }
 }
-
-
-
-

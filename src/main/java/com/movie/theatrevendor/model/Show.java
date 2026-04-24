@@ -30,8 +30,9 @@ public class Show {
     @JoinColumn(name = "theatre_id", nullable = false)
     private TheatreDetails theatre;
 
-    @Column(name = "screen_id", nullable = false)
-    private Long screenId;
+    @ManyToOne
+    @JoinColumn(name = "screen_id", nullable = false)
+    private Screen screen;
 
     @Column(nullable = false)
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")

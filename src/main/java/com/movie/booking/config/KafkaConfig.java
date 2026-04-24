@@ -20,7 +20,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Configuration
-@EnableKafka
 public class KafkaConfig {
 
     // Topic names

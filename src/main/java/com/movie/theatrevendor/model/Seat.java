@@ -5,49 +5,50 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
+/**
+ * Seat represents a physical seat in a screen.
+ * It is NOT tied to a specific show - seat availability per show is tracked in ShowSeat.
+ *
+ * DESIGN PRINCIPLE:
+ * Seat is immutable once created. Status is NOT stored here.
+ * Status is stored in ShowSeat (per show availability).
+ */
 @Entity
-@Table(name = "seats", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"show_id", "seat_number"})
-})
+@Table(
+        name = "seats",
+        indexes = {
+                @Index(name = "idx_seat_screen", columnList = "screen_id"),
+                @Index(name = "idx_seat_number", columnList = "seat_number")
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"screen_id", "seat_number"})
+        }
+)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Seat {
+public class  Seat {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "show_id", nullable = false, referencedColumnName = "id")
-    private Show show;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "screen_id", nullable = false)
+    private Screen screen;
 
     @Column(nullable = false)
-    private String seatNumber; //A1,C1
+    private String seatNumber; // A1, A2, B1, etc.
 
-    @Column(nullable = false)
-    @Enumerated(EnumType.STRING)
-    private SeatStatus status;
-    //private String status; // AVAILABLE, LOCKED, BOOKED, CANCELLED
+    @CreationTimestamp
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
-    // For row-level locking during booking
-    @Version
-    @Column(nullable = false)
-    private Long version;
-
-    // Timestamp when seat was locked (for timeout handling)
-    @Column
-    private LocalDateTime lockedAt;
-
-    @PrePersist
-    public void prePersist() {
-        if (this.status == null) {
-            this.status = SeatStatus.AVAILABLE;
-        }
-    }
 }
+
 
