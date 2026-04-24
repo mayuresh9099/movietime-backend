@@ -27,9 +27,6 @@ public class BulkOperationsService {
     private final DiscountService discountService;
     private final BookingSeatRepository bookingSeatRepository;
 
-    /**
-     * ✅ BULK BOOKING (NO LOOPS, NO STATUS)
-     */
     @Transactional
     public BulkBookingResult bulkBookSeats(String userEmail, Long showId, List<String> seatNumbers) {
 
@@ -118,7 +115,7 @@ public class BulkOperationsService {
     }
 
     /**
-     * ✅ BULK CANCEL (NO LOOPS)
+     * ✅ BULK CANCEL
      */
     @Transactional
     public BulkCancellationResult bulkCancelBookings(String userEmail, List<Long> bookingIds) {

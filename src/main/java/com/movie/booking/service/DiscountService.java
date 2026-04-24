@@ -11,8 +11,8 @@ import java.util.List;
 @Service
 public class DiscountService {
 
-    private static final BigDecimal THIRD_TICKET_DISCOUNT = new BigDecimal("0.50"); // 50%
-    private static final BigDecimal AFTERNOON_SHOW_DISCOUNT = new BigDecimal("0.20"); // 20%
+    private static final BigDecimal THIRD_TICKET_DISCOUNT = new BigDecimal("0.50");
+    private static final BigDecimal AFTERNOON_SHOW_DISCOUNT = new BigDecimal("0.20");
 
     // Afternoon show time range: 12:00 PM to 5:00 PM
     private static final LocalTime AFTERNOON_START = LocalTime.of(12, 0);

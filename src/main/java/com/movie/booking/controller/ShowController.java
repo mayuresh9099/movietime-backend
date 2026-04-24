@@ -189,27 +189,6 @@ public class ShowController {
     }
 
     // ========================= HELPERS =========================
-
-   /* private void createSeatsForScreen(Screen screen, Integer totalSeats) {
-
-        int seatsPerRow = 10;
-        int count = 0;
-
-        for (int i = 0; count < totalSeats; i++) {
-            char row = (char) ('A' + i);
-
-            for (int j = 1; j <= seatsPerRow && count < totalSeats; j++) {
-                Seat seat = new Seat();
-                seat.setScreen(screen);
-                seat.setSeatNumber(row + String.valueOf(j));
-                seatRepository.save(seat);
-                count++;
-            }
-        }
-
-        log.info("Seats created for screen {}", screen.getId());
-    }*/
-
     private void createSeatsForScreen(Screen screen) {
 
         List<Seat> seats = new java.util.ArrayList<>();
