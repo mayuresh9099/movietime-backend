@@ -18,22 +18,6 @@ public class AdminService {
     public List<TheatreDetails> getPendingTheatres() {
         return theatreRepository.findByStatus(TheatreStatus.PENDING);
     }
-
-/*    public String approveTheatre(Long theatreId) {
-
-        TheatreDetails theatre = theatreRepository.findById(theatreId)
-                .orElseThrow(() -> new RuntimeException("Theatre not found"));
-
-        if ("APPROVED".equals(theatre.getStatus())) {
-            return "Already approved";
-        }
-
-        theatre.setStatus("APPROVED");
-        theatreRepository.save(theatre);
-
-        return "Theatre approved successfully";
-    }*/
-
     public String approveTheatre(Long theatreId) {
 
         // Debug: Check if theatre exists
