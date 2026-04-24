@@ -1,0 +1,594 @@
+{
+  "info": {
+    "_postman_id": "6679cb75-283e-4d86-aa6a-6e7bdcb405e2",
+    "name": "MovieTime",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "9552061"
+  },
+  "item": [
+    {
+      "name": "VendorTheatreBooking",
+      "item": [
+        {
+          "name": "EnrollTheatre",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJNdWtlc2hAZ21haWwuY29tIiwiaWF0IjoxNzc2OTY2ODQ2LCJleHAiOjE3NzcwMDI4NDZ9.JfTV20D01sT3QjvieJilt723EBboi9yyN3ecuMdSwes",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"name\": \"PVR Cinemas\",\r\n  \"city\": \"Mumbai\",\r\n  \"owner\": {\r\n    \"id\": 12\r\n  },\r\n  \"address\": \"Andheri West\",\r\n  \"state\": \"Maharashtra\",\r\n  \"pincode\": \"400053\",\r\n  \"type\": \"MULTIPLEX\",\r\n  \"totalScreens\": 5,\r\n  \"facilities\": \"Dolby Atmos, Recliner Seats, Parking\",\r\n  \"contactNumber\": \"9876543210\",\r\n  \"description\": \"Premium multiplex with latest\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/owner/theatre",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "owner",
+                "theatre"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "LoginTheatreOwner",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"Mukesh@gmail.com\",\r\n  \"password\": \"mayuresh123\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/auth/login",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "LoginTheatreOwner Lavanya",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"Mukesh@gmail.com\",\r\n  \"password\": \"mayuresh123\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/auth/login",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "LoginTheatreOwner HR",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"Mukesh@gmail.com\",\r\n  \"password\": \"mayuresh123\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/auth/login",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "EnlistMovie",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoZW1hbnRAZ21haWwuY29tIiwiaWF0IjoxNzc3MDE2OTg2LCJleHAiOjE3NzcwNTI5ODZ9.cLbavfuV6MsjAl02QomKo4mYnqMm64csoe-6ZiJhDtE",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"theatreId\": 1,\r\n  \"screenId\": 2,\r\n  \"movieName\": \"THOR\",\r\n  \"startTime\": \"2026-04-24T13:00:00\",\r\n  \"endTime\": \"2026-04-24T16:30:00\",\r\n  \"totalSeats\": 100,\r\n  \"pricePerSeat\": 250.0\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/shows/create",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "shows",
+                "create"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Onboarding",
+      "item": [
+        {
+          "name": "SignUpCustomer",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"name\": \"Mayuresh D\",\r\n    \"email\": \"tech.mayuresh@gmail.com\",\r\n    \"password\": \"mayuresh123\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/auth/signup",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "auth",
+                "signup"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "SignUpTheatreOwner",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"name\": \"Mukesh M\",\r\n    \"email\": \"Mukesh@gmail.com\",\r\n    \"password\": \"mayuresh123\",\r\n    \"businessName\" : \"PVR Cinemas\", \r\n    \"role\": \"THEATRE_OWNER\"\r\n\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/auth/signup",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "auth",
+                "signup"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "CustomerLogin",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"tech.mayuresh@gmail.com\",\r\n  \"password\": \"mayuresh123\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/auth/login",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "GetPendingListofTheatre",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbkBtb3ZpZXRpbWUuY29tIiwiaWF0IjoxNzc2OTMyMjY3LCJleHAiOjE3NzY5NjgyNjd9.GEmD5NA9w5SIVYkn0VmqI0SMwAtj8V9fDa-pbsJvvbA",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/admin/theatres/pending",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "admin",
+                "theatres",
+                "pending"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GetPendingListofTheatre Copy",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbkBtb3ZpZXRpbWUuY29tIiwiaWF0IjoxNzc2OTMyMjY3LCJleHAiOjE3NzY5NjgyNjd9.GEmD5NA9w5SIVYkn0VmqI0SMwAtj8V9fDa-pbsJvvbA",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/admin/debug/db",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "admin",
+                "debug",
+                "db"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GetPendingAllListofTheatre",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/admin/theatres/all",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "admin",
+                "theatres",
+                "all"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ApproveTheatre",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbkBtb3ZpZXRpbWUuY29tIiwiaWF0IjoxNzc2ODgxMjUwLCJleHAiOjE3NzY5MTcyNTB9.HfM5wig0wpP2JX5bBjXs5duNyl6Qwg5YVgvCrh5NN9w",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/admin/theatre/1/approve",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "admin",
+                "theatre",
+                "1",
+                "approve"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"admin@movietime.com\",\r\n  \"password\": \"Publicis@123\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/auth/login",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "MovieBooking",
+      "item": [
+        {
+          "name": "GetListOfMovie",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZWNoLm1heXVyZXNoQGdtYWlsLmNvbSIsImlhdCI6MTc3NzAwNTcyNywiZXhwIjoxNzc3MDQxNzI3fQ.2zomJ2MbZCrvIttc0TsI5k07juuTl1AXHfZZhZA4JLY",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/browse/shows/1?date=2026-04-24",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "browse",
+                "shows",
+                "1"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-04-24"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GetListOfTHeatres",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZWNoLm1heXVyZXNoQGdtYWlsLmNvbSIsImlhdCI6MTc3NzAwNTk1OSwiZXhwIjoxNzc3MDQxOTU5fQ.J7JmmWP11vVDEixIcZuL8vZpfLZpqU_Xzk-jk1ffDEY",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/browse/theatres?movie=IRON-MAN&city=Sinnar",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "browse",
+                "theatres"
+              ],
+              "query": [
+                {
+                  "key": "movie",
+                  "value": "IRON-MAN"
+                },
+                {
+                  "key": "city",
+                  "value": "Sinnar"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Bookings",
+      "item": [
+        {
+          "name": "TicketBooking",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZWNoLm1heXVyZXNoQGdtYWlsLmNvbSIsImlhdCI6MTc3NzAwNTk1OSwiZXhwIjoxNzc3MDQxOTU5fQ.J7JmmWP11vVDEixIcZuL8vZpfLZpqU_Xzk-jk1ffDEY",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"showId\": 2,\r\n  \"seatNumbers\": [\"A5\", \"A3\"]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/bookings/create",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "bookings",
+                "create"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "CancelBooking",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZWNoLm1heXVyZXNoQGdtYWlsLmNvbSIsImlhdCI6MTc3NzAwNTk1OSwiZXhwIjoxNzc3MDQxOTU5fQ.J7JmmWP11vVDEixIcZuL8vZpfLZpqU_Xzk-jk1ffDEY",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"showId\": 2,\r\n  \"seatNumbers\": [\"A5\", \"A3\"]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/bookings/create",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "bookings",
+                "create"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
