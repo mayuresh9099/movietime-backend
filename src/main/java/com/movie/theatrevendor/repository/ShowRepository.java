@@ -43,7 +43,7 @@ public interface ShowRepository extends JpaRepository<Show, Long> {
                                            ShowStatus status,
                                            String movieName);
 
-    @Query("""
+/*    @Query("""
                 SELECT COUNT(s) > 0 FROM Show s
                 WHERE s.screen = :screen
                 AND (
@@ -52,6 +52,21 @@ public interface ShowRepository extends JpaRepository<Show, Long> {
                     OR (s.startTime BETWEEN :startTime AND :endTime)
                 )
             """)
+    boolean existsByScreenAndTimeOverlap(
+            @Param("screen") Screen screen,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime
+    );*/
+
+
+    @Query("""
+    SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END
+    FROM Show s
+    WHERE s.screen = :screen
+    AND (
+        :startTime < s.endTime AND :endTime > s.startTime
+    )
+""")
     boolean existsByScreenAndTimeOverlap(
             @Param("screen") Screen screen,
             @Param("startTime") LocalDateTime startTime,

@@ -22,7 +22,7 @@ public class AdminController {
         return adminService.getPendingTheatres();
     }
 
-    @PutMapping("/theatre/{id}/approve")
+    @PutMapping("/theatre/{id}  /approve")
     public String approve(@PathVariable Long id) {
         return adminService.approveTheatre(id);
     }
